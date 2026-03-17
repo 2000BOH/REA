@@ -172,6 +172,12 @@
       margin-top: 0;
     }
 
+    .stit-subj {
+      margin-top: 28px;
+      padding-top: 12px;
+      border-top: 1px solid var(--bd);
+    }
+
     .spin-wrap {
       display: flex;
       align-items: center;
@@ -1690,7 +1696,7 @@
               </div>
             </div>
           </div>
-          <div class="stit">과목별 이어보기</div>
+          <div class="stit stit-subj">과목별 이어보기</div>
           <div id="scards"></div>
         </div>
       </div>
@@ -2157,8 +2163,19 @@
 
     // ===== HELPERS =====
     function gp(id) { const p = prog[id] || {}; return { done: p.done || false, dates: p.dates || [], noteUrl: p.noteUrl || '', pct: p.pct || 0, sessions: p.sessions || [] }; }
-    function cnt(id) { return gp(id).dates.length; }
-    function totW() { return Object.values(prog).reduce((a, p) => a + (p.dates || []).length, 0); }
+    function cnt(id) {
+      const p = gp(id);
+      const sessCnt = (p.sessions || []).filter(s => (s.pct || 0) >= 80).length;
+      // 과거 데이터 호환용: 세션이 없으면 기존 dates 길이를 사용
+      return sessCnt > 0 ? sessCnt : p.dates.length;
+    }
+    function totW() {
+      return Object.values(prog).reduce((a, p) => {
+        const sessions = p.sessions || [];
+        const c = sessions.filter(s => (s.pct || 0) >= 80).length;
+        return a + c;
+      }, 0);
+    }
     function getVid(url) { const m = url.match(/youtu\.be\/([^?&]+)/); return m ? m[1] : null; }
     function pLec(id) { const i = L.findIndex(l => l.id === id); return i > 0 ? L[i - 1] : null; }
     function nLec(id) { const i = L.findIndex(l => l.id === id); return i < L.length - 1 ? L[i + 1] : null; }
@@ -2177,17 +2194,22 @@
       const pct = parseInt(v);
       if (!vCurId) return;
       const p = prog[vCurId] || {};
-      // 세션 기록 추가
       if (!p.sessions) p.sessions = [];
       p.pct = pct;
-      p.sessions.push({ date: new Date().toISOString(), pct, note: '수동 입력' });
+      const nowIso = new Date().toISOString();
+      p.sessions.push({ date: nowIso, pct, note: '수동 입력' });
+      // 80% 이상 시청 시에만 1회 수강 처리 및 이력/연속학습 갱신
+      if (pct >= 80) {
+        p.dates = [...(p.dates || []), nowIso];
+        hist.push({ lid: vCurId, date: nowIso });
+        updStreak();
+      }
       prog[vCurId] = p;
-      // 진도 텍스트
       document.getElementById('vWatchLbl').textContent = pct + '% 기록됨';
-      cloudSave(); rendAll();
-      // 이력 카드 업데이트
+      cloudSave();
+      rendAll();
       rendVHist(vCurId);
-      showToast('📺 진도 ' + pct + '% 저장!');
+      showToast('📺 진도 ' + pct + '% 저장! (80% 이상만 1회로 집계됩니다)');
     }
 
     // ===== STREAK =====
@@ -2226,8 +2248,9 @@
         const nxSj = SJ.find(sx => sx.id === s.id + 1), nuNx = nxSj ? nextUndone(nxSj.id) : null, showNxSj = !nu && nuNx;
         const lwC = lw ? cnt(lw.id) : 0, prevC = prev ? cnt(prev.id) : 0, nuC = nu ? cnt(nu.id) : 0;
         const qns = ls.map(l => { const p = gp(l.id); const cls = (lw && l.id === lw.id) ? 'qnum cr' : p.done ? 'qnum dn' : 'qnum'; return `<div class="${cls}" onclick="openVideo('${l.id}')">${parseInt(l.n)}</div>`; }).join('');
+        const sidLabel = String(s.id).padStart(2, '0') + '_' + s.name;
         return `<div class="scard">
-      <div class="sch"><div class="sdo" style="background:${s.color}"></div><div class="snm">${s.icon} ${s.name}</div><div class="scn">${dn}/${ls.length} · ${pct2}%</div></div>
+      <div class="sch"><div class="sdo" style="background:${s.color}"></div><div class="snm">${s.icon} ${sidLabel}</div><div class="scn">${dn}/${ls.length} · ${pct2}%</div></div>
       <div class="spb"><div class="spf" style="background:${s.color};width:${pct2}%"></div></div>
       <div class="srow">
         <div class="srb${!prev ? ' dis' : ''}" onclick="${prev ? `openVideo('${prev.id}')` : ''}" style="${!prev ? 'pointer-events:none' : ''}"><div class="srbl">◀ 이전</div><div class="srbn">${prev ? prev.n + (prevC > 0 ? ' · ' + prevC + '회' : '') : ''}</div><div class="srbt">${prev ? prev.t : '없음'}</div></div>
@@ -2258,10 +2281,11 @@
         </div>
       </div>`;
         }).join('');
+        const sidLabel = String(s.id).padStart(2, '0') + '_' + s.name;
         return `<div class="ssec" id="ss${s.id}">
       <div class="ssh" onclick="togS(${s.id})">
         <div class="sbdg" style="background:${s.color}22">${s.icon}</div>
-        <div class="si"><div class="snm2" style="color:${s.color}">${s.name}</div><div class="smt">${dn}/${ls.length} 완료</div></div>
+        <div class="si"><div class="snm2" style="color:${s.color}">${sidLabel}</div><div class="smt">${dn}/${ls.length} 완료</div></div>
         <div class="sarr"><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="9,18 15,12 9,6"/></svg></div>
       </div>
       <div class="acc-qn"><div class="acc-qn-lbl">번호 바로가기</div><div class="qnums">${qns}</div></div>
@@ -2372,13 +2396,11 @@
       setNoteUI(nu);
       // 화면 열기
       document.getElementById('vscr').classList.add('op');
-      // 수강 기록 추가
+      // 기본 상태 초기화 (여기서는 단순 마지막 강의만 기록, 수강 횟수/이력은 80% 이상에서만 처리)
       const pp = prog[id] || {};
       pp.done = pp.done || false; pp.noteUrl = pp.noteUrl || ''; pp.sessions = pp.sessions || []; pp.pct = pp.pct || 0;
-      pp.dates = [...(pp.dates || []), new Date().toISOString()];
       prog[id] = pp; lastId = id;
-      hist.push({ lid: id, date: new Date().toISOString() });
-      updStreak(); throttledCloudSave(); rendAll();
+      throttledCloudSave(); rendAll();
       // 이전에 있던 yPlayer 로직 삭제됨
     }
 
@@ -2468,7 +2490,25 @@
     }
 
     function toggleVDone() {
-      const p = prog[vCurId] || {}; p.done = !p.done; prog[vCurId] = p; cloudSave(); rendAll();
+      if (!vCurId) return;
+      const p = prog[vCurId] || {};
+      const pct = p.pct || 0;
+      // 80% 미만이면 완료로 표시 불가
+      if (pct < 80) {
+        showToast('⚠️ 80% 이상 시청해야 완료로 표시됩니다');
+        return;
+      }
+      const nowIso = new Date().toISOString();
+      // 처음 완료로 표시되는 경우, 1회 수강 및 이력/연속학습 처리 보장
+      if (!p.done && (!p.dates || p.dates.length === 0)) {
+        p.dates = [...(p.dates || []), nowIso];
+        hist.push({ lid: vCurId, date: nowIso });
+        updStreak();
+      }
+      p.done = !p.done;
+      prog[vCurId] = p;
+      cloudSave();
+      rendAll();
       document.getElementById('vDoneBtn').className = 'vbtn-done' + (p.done ? ' on' : '');
       document.getElementById('vDoneTxt').textContent = p.done ? '✅ 완료됨 (탭으로 취소)' : '✓ 완료로 표시';
       showToast(p.done ? '✅ 완료!' : '↩ 완료 취소');
