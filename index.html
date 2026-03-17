@@ -2026,6 +2026,7 @@
     let cf = 'all', cp = 'home', ht = 'day';
     let vCurId = null;
     const LSK = 'cja_v9';
+    const LVER = 'cja_v9_80rule_reset';
     let JKEY = '', JBIN = '';
 
     // YouTube IFrame API 로드 코틀 삭제 (외부 링크 전용이므로 더 이상 JS API가 필요 없음)
@@ -2047,8 +2048,24 @@
       } catch (e) { }
     }
     function load() {
-      try { const d = JSON.parse(localStorage.getItem(LSK) || '{}'); prog = d.prog || {}; hist = d.hist || []; streak = d.streak || { days: 0, lastDate: null }; lastId = d.lastId || null; if (!streak.days) streak = { days: 0, lastDate: null }; }
+      try {
+        const d = JSON.parse(localStorage.getItem(LSK) || '{}');
+        prog = d.prog || {}; hist = d.hist || []; streak = d.streak || { days: 0, lastDate: null }; lastId = d.lastId || null;
+        if (!streak.days) streak = { days: 0, lastDate: null };
+      }
       catch (e) { prog = {}; hist = []; streak = { days: 0, lastDate: null }; lastId = null; }
+      // 80% 규칙 적용을 위한 1회 초기화: 과거 수강 기록 전부 리셋
+      try {
+        const v = localStorage.getItem(LVER);
+        if (v !== '1') {
+          prog = {};
+          hist = [];
+          streak = { days: 0, lastDate: null };
+          lastId = null;
+          localStorage.setItem(LVER, '1');
+          save();
+        }
+      } catch (e) { }
     }
 
     // ===== JSONBIN 자동 동기화 =====
